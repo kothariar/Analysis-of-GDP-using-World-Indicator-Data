@@ -1,0 +1,92 @@
+---
+title: "ANALYSIS OF GDP USING WORLD INDICATOR DATA"
+date: "11/24/2021"
+output: html_document
+--- 
+
+```{r}
+# Required Libraries
+library(tidyverse)  # data manipulation
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering algorithms & visualization
+library(plotly)     # Plotly's R graphing library
+library(ClusterR) 
+library(dplyr)
+library(tidyr)
+library(cluster)
+library(ggplot2)
+library(fpc)
+```
+
+
+```{r}
+df <- read.csv("World Indicators.csv", header = TRUE, na = "")
+df <- na.omit(df[,c(5,7,9,12,13,20)])
+df$GDP <- as.numeric(gsub('[$,]', '', df$GDP))
+df$Health.Exp.Capita <- as.numeric(gsub('[$,]', '', df$Health.Exp.Capita))
+fviz_nbclust(df[,1:5], kmeans, method = "wss")
+fviz_nbclust(df[,1:5], kmeans, method = "silhouette")
+```
+
+```{r}
+# elbow method returns the k values is 2 but it is too general for this dataset. 
+set.seed(100)
+km <- kmeans(df[,1:5], 2, nstart = 10)
+km$cluster
+df$Cluster <- km$cluster
+
+hc.single<- hclust(dist(df[,1:5]), method = "single")
+plot(hc.single)
+df$Cluster2 <- cutree(hc.single, 2)
+```
+
+```{r}
+#---------------------------------------------------------------------
+# This is the function to return k value versus CH index
+# Observation: We can see when k = 7 there is maximum CH index, which means
+# when k = 7, the clustering solution with the best preformance.
+# Reference: https://rstudio-pubs-static.s3.amazonaws.com/91161_f2334f1f6d624adcad1a59b4f127d3f4.html
+ch.index = function(x,kmax,iter.max=100,nstart=10,algorithm="Lloyd") {
+  ch = numeric(length=kmax-1)
+  n = nrow(x)
+  for (k in 2:kmax) {
+    a = kmeans(x,k,iter.max=iter.max,nstart=nstart,algorithm=algorithm)
+    w = a$tot.withinss
+    b = a$betweenss
+    ch[k-1] = (b/(k-1))/(w/(n-k))
+  }
+  return(list(k=2:kmax,ch=ch))
+}
+```
+
+```{r}
+# plot to show k values versus CH index.
+a1 = ch.index(df[,1:5],kmax=10)
+k1.hat = a1$k[which.max(a1$ch)]
+k1 = kmeans(df[,1:5], k1.hat, iter.max=100, nstart=10, algorithm="Lloyd")
+plot(a1$k,a1$ch, xlab='K', ylab='CH(K)', type='b',
+     main='K-Means Clustering : CH Index vs K' )
+```
+
+```{r}
+# use k = 7 for kmeans, by CH we can get 3126.38 as max CH index
+km_new <- kmeans(df[,1:5], 7, nstart = 10)
+df$Cluster_CH <- km_new$cluster
+round(calinhara(df[,1:5],km_new$cluster),digits=2)
+```
+
+```{r}
+# three scattle plots
+ggplot(df, aes(x = Infant.Mortality.Rate, y = GDP)) +
+  geom_point(aes(color = Cluster_CH, alpha = 0.5))
+
+ggplot(df, aes(x = Life.Expectancy.Male, y = GDP)) +
+  geom_point(aes(color = Cluster_CH, alpha = 0.5))
+
+ggplot(df, aes(x = Health.Exp.Capita, y = Life.Expectancy.Female)) +
+  geom_point(aes(color = Cluster_CH, alpha = 0.5))
+
+```
+
+
+
